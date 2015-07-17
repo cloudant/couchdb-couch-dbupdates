@@ -1,6 +1,9 @@
 -module(couch_dbupdates).
 
--export([handle_dbupdates/3]).
+-export([
+    handle_dbupdates/3,
+    handle_event/3
+]).
 
 
 handle_dbupdates(Fun, Acc, Options) ->
@@ -8,8 +11,13 @@ handle_dbupdates(Fun, Acc, Options) ->
     try
         loop(Fun, Acc, Options)
     after
-        couch_db_update_notifier:stop(NotifierPid)
+        couch_event:stop_listener(NotifierPid)
     end.
+
+
+handle_event(DbName, Event, Parent) ->
+    Parent ! {Event, DbName},
+    {ok, Parent}.
 
 
 loop(Fun, Acc, Options) ->
@@ -39,8 +47,5 @@ loop(Fun, Acc, Options) ->
     end.
 
 db_update_notifier() ->
-    Self = self(),
-    {ok, Notifier} = couch_db_update_notifier:start_link(fun(Event) ->
-        Self ! {db_updated, Event}
-    end),
-    Notifier.
+    {ok, Pid} = couch_event:link_listener(?MODULE, handle_event, self(), []),
+    Pid.
